@@ -543,19 +543,30 @@ WHERE ...`}
         </div>
       </div>
       
-      {/* Functions Popup */}
+      {/* Functions Sidebar */}
       {showFunctionsPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-1/3">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">Available Functions</h3>
-              <button onClick={toggleFunctionsPopup} className="text-gray-500 hover:text-gray-700">
-                <X size={24} />
-              </button>
-            </div>
+        <div 
+          className="fixed right-10 top-[170px] w-64 bg-white shadow-lg rounded-lg transform transition-transform duration-300 ease-in-out z-50 overflow-hidden"
+          style={{
+            transform: showFunctionsPopup ? 'translateX(0)' : 'translateX(100%)',
+          }}
+        >
+          <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-3 flex justify-between items-center">
+            <h3 className="text-lg font-semibold">Available Functions</h3>
+            <button 
+              onClick={toggleFunctionsPopup} 
+              className="text-white hover:text-gray-200 p-1"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <div className="p-4">
             <ul className="space-y-2">
               {functions.map((func) => (
-                <li key={func} className="bg-gray-100 p-2 rounded">
+                <li 
+                  key={func} 
+                  className="bg-gray-50 p-2 rounded text-sm hover:bg-gray-100 transition-colors cursor-pointer"
+                >
                   {func}
                 </li>
               ))}
