@@ -133,6 +133,7 @@ const QueryGenerator = () => {
   const [showFunctionsPopup, setShowFunctionsPopup] = useState(false);
   const [filters, setFilters] = useState([]);
   const [queryJson, setQueryJson] = useState(null);
+  const [showLoadingPopup, setShowLoadingPopup] = useState(false);
 
   const conditions = [
     'equals',
@@ -639,43 +640,54 @@ const QueryGenerator = () => {
   const handleNextStep = () => {
     if (currentStep < 3) {
       if (currentStep === 2) {
-        const selectedTables = Object.keys(selectedFields);
-        const generatedJoins = generateJoins(selectedTables);
+        // Show loading popup
+        setShowLoadingPopup(true);
 
-        const generatedJson = {
-          query: {
-            tables: Object.entries(selectedFields).map(([objectName, fields]) => ({
-              name: objectName,
-              fields: fields.map(field => ({
-                name: field,
-                ...(fieldFunctions[`${objectName}.${field}`] && {
-                  function: fieldFunctions[`${objectName}.${field}`]
-                })
+        // Generate query after delay
+        setTimeout(() => {
+          const selectedTables = Object.keys(selectedFields);
+          const generatedJoins = generateJoins(selectedTables);
+          
+          const generatedJson = {
+            query: {
+              tables: Object.entries(selectedFields).map(([objectName, fields]) => ({
+                name: objectName,
+                fields: fields.map(field => ({
+                  name: field,
+                  ...(fieldFunctions[`${objectName}.${field}`] && {
+                    function: fieldFunctions[`${objectName}.${field}`]
+                  })
+                }))
+              })),
+              joins: generatedJoins,
+              conditions: filters.map(filter => ({
+                table: filter.object,
+                field: filter.field,
+                operator: filter.condition,
+                value: filter.value
+              })),
+              groupBy: groupByFields.map(field => ({
+                table: field.split('.')[0],
+                field: field.split('.')[1]
+              })),
+              orderBy: orderByFields.map(field => ({
+                table: field.split('.')[0],
+                field: field.split('.')[1]
               }))
-            })),
-            joins: generatedJoins,
-            conditions: filters.map(filter => ({
-              table: filter.object,
-              field: filter.field,
-              operator: filter.condition,
-              value: filter.value
-            })),
-            groupBy: groupByFields.map(field => ({
-              table: field.split('.')[0],
-              field: field.split('.')[1]
-            })),
-            orderBy: orderByFields.map(field => ({
-              table: field.split('.')[0],
-              field: field.split('.')[1]
-            }))
-          }
-        };
+            }
+          };
 
-        setQueryJson(generatedJson);
-        console.log('Generated Query JSON:', JSON.stringify(generatedJson, null, 2));
-        console.log('Generated SQL Query:', generateQuery());
+          setQueryJson(generatedJson);
+          console.log('Generated Query JSON:', JSON.stringify(generatedJson, null, 2));
+          console.log('Generated SQL Query:', generateQuery());
+          
+          // Hide loading popup and move to next step
+          setShowLoadingPopup(false);
+          setCurrentStep(currentStep + 1);
+        }, 3000); // 3 second delay
+      } else {
+        setCurrentStep(currentStep + 1);
       }
-      setCurrentStep(currentStep + 1);
     }
   };
 
@@ -695,45 +707,6 @@ const QueryGenerator = () => {
     (total, fields) => total + fields.length,
     0
   );
-
-  const generateWhereClause = () => {
-    if (!filters.length) return '';
-
-    const conditions = filters.map(filter => {
-      if (!filter.object || !filter.field || !filter.condition || !filter.value) return null;
-
-      let operator;
-      switch (filter.condition) {
-        case 'equals':
-          operator = '=';
-          break;
-        case 'not equals':
-          operator = '!=';
-          break;
-        case 'contains':
-          return `${filter.object}.${filter.field} LIKE '%${filter.value}%'`;
-        case 'does not contain':
-          return `${filter.object}.${filter.field} NOT LIKE '%${filter.value}%'`;
-        case 'greater than':
-          operator = '>';
-          break;
-        case 'less than':
-          operator = '<';
-          break;
-        case 'starts with':
-          return `${filter.object}.${filter.field} LIKE '${filter.value}%'`;
-        case 'ends with':
-          return `${filter.object}.${filter.field} LIKE '%${filter.value}'`;
-        default:
-          return null;
-      }
-
-      return `${filter.object}.${filter.field} ${operator} '${filter.value}'`;
-    })
-    .filter(condition => condition !== null);
-
-    return conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  };
 
   const generateQuery = () => {
     const selectedTables = Object.keys(selectedFields);
@@ -1135,6 +1108,16 @@ const QueryGenerator = () => {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Popup */}
+      {showLoadingPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 flex flex-col items-center space-y-4 transform transition-all duration-300 ease-in-out animate-fadeIn">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-lg font-semibold text-gray-700">Generating Query...</p>
           </div>
         </div>
       )}
