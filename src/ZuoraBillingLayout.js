@@ -131,6 +131,35 @@ const QueryGenerator = () => {
   const [groupByFields, setGroupByFields] = useState([]);
   const [orderByFields, setOrderByFields] = useState([]);
   const [showFunctionsPopup, setShowFunctionsPopup] = useState(false);
+  const [filters, setFilters] = useState([]);
+
+  const conditions = [
+    'equals',
+    'not equals',
+    'contains',
+    'does not contain',
+    'greater than',
+    'less than',
+    'starts with',
+    'ends with',
+  ];
+
+  const addFilter = () => {
+    setFilters([
+      ...filters,
+      { object: '', field: '', condition: '', value: '' }
+    ]);
+  };
+
+  const updateFilter = (index, field, value) => {
+    const updatedFilters = [...filters];
+    updatedFilters[index] = { ...updatedFilters[index], [field]: value };
+    setFilters(updatedFilters);
+  };
+
+  const removeFilter = (index) => {
+    setFilters(filters.filter((_, i) => i !== index));
+  };
 
   const objects = [
     {
@@ -327,6 +356,82 @@ const QueryGenerator = () => {
     0
   );
 
+  // Add this function to generate the WHERE clause from filters
+  const generateWhereClause = () => {
+    if (!filters.length) return '';
+
+    const conditions = filters.map(filter => {
+      if (!filter.object || !filter.field || !filter.condition || !filter.value) return null;
+
+      let operator;
+      switch (filter.condition) {
+        case 'equals':
+          operator = '=';
+          break;
+        case 'not equals':
+          operator = '!=';
+          break;
+        case 'contains':
+          return `${filter.object}.${filter.field} LIKE '%${filter.value}%'`;
+        case 'does not contain':
+          return `${filter.object}.${filter.field} NOT LIKE '%${filter.value}%'`;
+        case 'greater than':
+          operator = '>';
+          break;
+        case 'less than':
+          operator = '<';
+          break;
+        case 'starts with':
+          return `${filter.object}.${filter.field} LIKE '${filter.value}%'`;
+        case 'ends with':
+          return `${filter.object}.${filter.field} LIKE '%${filter.value}'`;
+        default:
+          return null;
+      }
+
+      // For simple operators, use this format
+      return `${filter.object}.${filter.field} ${operator} '${filter.value}'`;
+    })
+    .filter(condition => condition !== null);
+
+    return conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  };
+
+  // Update your existing query generation logic to include the WHERE clause
+  const generateQuery = () => {
+    const selectedFieldsFormatted = Object.entries(selectedFields)
+      .flatMap(([objectName, fields]) =>
+        fields.map(field => {
+          const functionName = fieldFunctions[`${objectName}.${field}`];
+          if (functionName) {
+            return `${functionName}(${objectName}.${field}) as "${functionName}_${field}"`;
+          }
+          return `${objectName}.${field}`;
+        })
+      )
+      .join(', ');
+
+    const groupByClause = groupByFields.length
+      ? `GROUP BY ${groupByFields.join(', ')}`
+      : '';
+
+    const orderByClause = orderByFields.length
+      ? `ORDER BY ${orderByFields.join(', ')}`
+      : '';
+
+    const whereClause = generateWhereClause();
+
+    const query = `
+      SELECT ${selectedFieldsFormatted}
+      FROM ${Object.keys(selectedFields).join(' JOIN ')}
+      ${whereClause}
+      ${groupByClause}
+      ${orderByClause}
+    `.trim();
+
+    return query;
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-2xl font-bold mb-4">Report Studio</h2>
@@ -441,7 +546,85 @@ const QueryGenerator = () => {
                   </div>
                 </div>
               ))}
+
+              {/* Filters Section */}
+              <div className="mt-6">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-semibold">Filters</h3>
+                  <button
+                    onClick={addFilter}
+                    className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm"
+                  >
+                    Add Filter
+                  </button>
+                </div>
+                
+                {filters.map((filter, index) => (
+                  <div key={index} className="flex items-center space-x-3 mb-2 bg-gray-50 p-3 rounded-lg">
+                    <select
+                      value={filter.object}
+                      onChange={(e) => updateFilter(index, 'object', e.target.value)}
+                      className="p-2 border rounded-md text-sm w-1/4"
+                    >
+                      <option value="">Select Object</option>
+                      {objects.map((obj) => (
+                        <option key={obj.name} value={obj.name}>
+                          {obj.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={filter.field}
+                      onChange={(e) => updateFilter(index, 'field', e.target.value)}
+                      className="p-2 border rounded-md text-sm w-1/4"
+                      disabled={!filter.object}
+                    >
+                      <option value="">Select Field</option>
+                      {filter.object &&
+                        objects
+                          .find((obj) => obj.name === filter.object)
+                          ?.fields.map((field) => (
+                            <option key={field} value={field}>
+                              {field}
+                            </option>
+                          ))}
+                    </select>
+
+                    <select
+                      value={filter.condition}
+                      onChange={(e) => updateFilter(index, 'condition', e.target.value)}
+                      className="p-2 border rounded-md text-sm w-1/4"
+                      disabled={!filter.field}
+                    >
+                      <option value="">Select Condition</option>
+                      {conditions.map((condition) => (
+                        <option key={condition} value={condition}>
+                          {condition}
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      type="text"
+                      value={filter.value}
+                      onChange={(e) => updateFilter(index, 'value', e.target.value)}
+                      placeholder="Enter value"
+                      className="p-2 border rounded-md text-sm w-1/4"
+                      disabled={!filter.condition}
+                    />
+
+                    <button
+                      onClick={() => removeFilter(index)}
+                      className="text-gray-500 hover:text-red-500"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
+
             <div className="w-1/3">
               <button
                 onClick={toggleFunctionsPopup}
@@ -492,23 +675,10 @@ const QueryGenerator = () => {
         </div>
       )}
       {currentStep === 3 && (
-        <div>
+        <div className="bg-gray-100 p-4 rounded">
           <h3 className="font-semibold mb-2">Generated Query</h3>
-          <pre className="bg-gray-100 p-4 rounded">
-            {`SELECT ${Object.entries(selectedFields)
-              .flatMap(([objectName, fields]) =>
-                fields.map((field) => {
-                  const func = fieldFunctions[`${objectName}.${field}`];
-                  return func
-                    ? `${func}(${objectName}.${field}) AS ${func}_${field}`
-                    : `${objectName}.${field}`;
-                })
-              )
-              .join(", ")}
-FROM ${Object.keys(selectedFields).join(", ")}
-${groupByFields.length > 0 ? `GROUP BY ${groupByFields.join(", ")}` : ""}
-${orderByFields.length > 0 ? `ORDER BY ${orderByFields.join(", ")}` : ""}
-WHERE ...`}
+          <pre className="whitespace-pre-wrap bg-white p-4 rounded border">
+            {generateQuery()}
           </pre>
         </div>
       )}
