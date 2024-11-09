@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -132,6 +132,7 @@ const QueryGenerator = () => {
   const [orderByFields, setOrderByFields] = useState([]);
   const [showFunctionsPopup, setShowFunctionsPopup] = useState(false);
   const [filters, setFilters] = useState([]);
+  const [queryJson, setQueryJson] = useState(null);
 
   const conditions = [
     'equals',
@@ -550,11 +551,139 @@ const QueryGenerator = () => {
 
   const currentObject = objects.find((obj) => obj.name === selectedObject);
 
+  const generateJoins = (selectedTables) => {
+    const joins = [];
+    const joinMappings = {
+      'Payment Part': [
+        {
+          sourceTable: 'Invoice',
+          sourceField: 'Id',
+          targetTable: 'Payment Part',
+          targetField: 'Billing Document Owner ID',
+          type: 'INNER'
+        }
+      ],
+      'Invoice Item': [
+        {
+          sourceTable: 'Invoice',
+          sourceField: 'Id',
+          targetTable: 'Invoice Item',
+          targetField: 'Invoice Id',
+          type: 'INNER'
+        }
+      ],
+      'Credit Memo': [
+        {
+          sourceTable: 'Invoice',
+          sourceField: 'Id',
+          targetTable: 'Credit Memo',
+          targetField: 'Invoice Id',
+          type: 'INNER'
+        }
+      ],
+      'Debit Memo': [
+        {
+          sourceTable: 'Invoice',
+          sourceField: 'Id',
+          targetTable: 'Debit Memo',
+          targetField: 'Invoice Id',
+          type: 'INNER'
+        }
+      ],
+      'Payments': [
+        {
+          sourceTable: 'Account',
+          sourceField: 'Id',
+          targetTable: 'Payments',
+          targetField: 'Account Id',
+          type: 'INNER'
+        }
+      ],
+      'Subscription': [
+        {
+          sourceTable: 'Account',
+          sourceField: 'Id',
+          targetTable: 'Subscription',
+          targetField: 'Account Id',
+          type: 'INNER'
+        }
+      ],
+      'Invoice': [
+        {
+          sourceTable: 'Account',
+          sourceField: 'Id',
+          targetTable: 'Invoice',
+          targetField: 'Account Id',
+          type: 'INNER'
+        }
+      ]
+    };
+
+    // Only process joins for selected tables
+    selectedTables.forEach(table => {
+      const possibleJoins = joinMappings[table];
+      if (possibleJoins) {
+        possibleJoins.forEach(join => {
+          // Only add the join if both tables are in the selected tables
+          if (selectedTables.includes(join.sourceTable) && 
+              selectedTables.includes(join.targetTable)) {
+            joins.push(join);
+          }
+        });
+      }
+    });
+
+    return joins;
+  };
+
   const handleNextStep = () => {
     if (currentStep < 3) {
+      if (currentStep === 2) {
+        const selectedTables = Object.keys(selectedFields);
+        const generatedJoins = generateJoins(selectedTables);
+
+        const generatedJson = {
+          query: {
+            tables: Object.entries(selectedFields).map(([objectName, fields]) => ({
+              name: objectName,
+              fields: fields.map(field => ({
+                name: field,
+                ...(fieldFunctions[`${objectName}.${field}`] && {
+                  function: fieldFunctions[`${objectName}.${field}`]
+                })
+              }))
+            })),
+            joins: generatedJoins,
+            conditions: filters.map(filter => ({
+              table: filter.object,
+              field: filter.field,
+              operator: filter.condition,
+              value: filter.value
+            })),
+            groupBy: groupByFields.map(field => ({
+              table: field.split('.')[0],
+              field: field.split('.')[1]
+            })),
+            orderBy: orderByFields.map(field => ({
+              table: field.split('.')[0],
+              field: field.split('.')[1]
+            }))
+          }
+        };
+
+        setQueryJson(generatedJson);
+        console.log('Generated Query JSON:', JSON.stringify(generatedJson, null, 2));
+        console.log('Generated SQL Query:', generateQuery());
+      }
       setCurrentStep(currentStep + 1);
     }
   };
+
+  useEffect(() => {
+    if (queryJson) {
+      console.log('Query JSON Updated:', JSON.stringify(queryJson, null, 2));
+    }
+  }, [queryJson]);
 
   const handlePreviousStep = () => {
     if (currentStep > 1) {
@@ -567,7 +696,6 @@ const QueryGenerator = () => {
     0
   );
 
-  // Add this function to generate the WHERE clause from filters
   const generateWhereClause = () => {
     if (!filters.length) return '';
 
@@ -600,7 +728,6 @@ const QueryGenerator = () => {
           return null;
       }
 
-      // For simple operators, use this format
       return `${filter.object}.${filter.field} ${operator} '${filter.value}'`;
     })
     .filter(condition => condition !== null);
@@ -608,8 +735,10 @@ const QueryGenerator = () => {
     return conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   };
 
-  // Update your existing query generation logic to include the WHERE clause
   const generateQuery = () => {
+    const selectedTables = Object.keys(selectedFields);
+    
+    // Format selected fields
     const selectedFieldsFormatted = Object.entries(selectedFields)
       .flatMap(([objectName, fields]) =>
         fields.map(field => {
@@ -622,23 +751,78 @@ const QueryGenerator = () => {
       )
       .join(', ');
 
-    const groupByClause = groupByFields.length
-      ? `GROUP BY ${groupByFields.join(', ')}`
+    // Get joins only for selected tables
+    const joins = generateJoins(selectedTables);
+    
+    // Start with the first table
+    let fromClause = selectedTables[0];
+    
+    // Add JOIN clauses only for selected tables
+    const joinClauses = joins.map(join => 
+      `JOIN ${join.targetTable} ON ${join.targetTable}.${join.targetField} = ${join.sourceTable}.${join.sourceField}`
+    ).join('\n      ');
+
+    // Generate WHERE clause - Fixed version
+    const whereConditions = filters
+      .filter(filter => filter.object && filter.field && filter.condition && filter.value) // Ensure all filter properties exist
+      .map(filter => {
+        let operator;
+        switch (filter.condition) {
+          case 'equals':
+            operator = '=';
+            break;
+          case 'not equals':
+            operator = '!=';
+            break;
+          case 'contains':
+            return `${filter.object}.${filter.field} LIKE '%${filter.value}%'`;
+          case 'does not contain':
+            return `${filter.object}.${filter.field} NOT LIKE '%${filter.value}%'`;
+          case 'greater than':
+            operator = '>';
+            break;
+          case 'less than':
+            operator = '<';
+            break;
+          case 'starts with':
+            return `${filter.object}.${filter.field} LIKE '${filter.value}%'`;
+          case 'ends with':
+            return `${filter.object}.${filter.field} LIKE '%${filter.value}'`;
+          default:
+            return null;
+        }
+        return `${filter.object}.${filter.field} ${operator} '${filter.value}'`;
+      })
+      .filter(condition => condition !== null)
+      .join(' AND ');
+
+    const whereClause = whereConditions ? `WHERE ${whereConditions}` : '';
+
+    // Generate GROUP BY clause (only for selected tables)
+    const groupByClause = groupByFields
+      .filter(field => selectedTables.includes(field.split('.')[0]))
+      .length > 0
+      ? `GROUP BY ${groupByFields
+          .filter(field => selectedTables.includes(field.split('.')[0]))
+          .join(', ')}`
       : '';
 
-    const orderByClause = orderByFields.length
-      ? `ORDER BY ${orderByFields.join(', ')}`
+    // Generate ORDER BY clause (only for selected tables)
+    const orderByClause = orderByFields
+      .filter(field => selectedTables.includes(field.split('.')[0]))
+      .length > 0
+      ? `ORDER BY ${orderByFields
+          .filter(field => selectedTables.includes(field.split('.')[0]))
+          .join(', ')}`
       : '';
 
-    const whereClause = generateWhereClause();
-
-    const query = `
-      SELECT ${selectedFieldsFormatted}
-      FROM ${Object.keys(selectedFields).join(' JOIN ')}
+    // Construct the final query
+    const query = `SELECT ${selectedFieldsFormatted}
+      FROM ${fromClause}
+      ${joinClauses}
       ${whereClause}
       ${groupByClause}
-      ${orderByClause}
-    `.trim();
+      ${orderByClause}`.trim();
 
     return query;
   };
@@ -758,7 +942,6 @@ const QueryGenerator = () => {
                 </div>
               ))}
 
-              {/* Filters Section */}
               <div className="mt-6">
                 <div className="flex justify-between items-center mb-3">
                   <h3 className="font-semibold">Filters</h3>
