@@ -1,6 +1,6 @@
 # Report Studio
 
-Report Studio is a powerful data querying and reporting application built with React, designed to help users efficiently query and analyze their billing and revenue data. This modern web application provides an intuitive interface for writing SQL queries, exploring data schemas, and visualizing results.
+Zuora Report Studio Mockup is built with React & tailwind css for styling. This solution proposed is designed to help users efficiently query and analyze their billing and revenue data. Report Studio provides an intuitive interface for writing SQL queries, exploring data schemas, and visualizing results.
 
 ## Features
 
@@ -13,13 +13,9 @@ Report Studio is a powerful data querying and reporting application built with R
 ## Core Components
 
 ### Data Objects
-The application provides access to key business objects including:
-- **Account**: Account Number, Account Balance, Auto Pay, Status, Currency, ID
-- **Subscription**: Name, Initial Term, Status, Account Id
-- **Payments**: Amount, Status, Payment Number, Account Id
+The application provides access to key business objects such as accounts, subscription, invoices, payments, invoice items, etc. 
 
 ### User Interface
-- Modern, responsive design built with Tailwind CSS
 - Interactive components using Radix UI primitives
 - Clean and intuitive layout for optimal user experience
 
@@ -49,13 +45,12 @@ npm start
 
 The application will be available at [http://localhost:3000](http://localhost:3000)
 
-## Technology Stack
+## Technology Stack (Used for Mock Up)
 
 - **React**: Frontend library for building user interfaces
 - **Tailwind CSS**: Utility-first CSS framework for styling
 - **Radix UI**: Unstyled, accessible UI components
 - **React Feather**: Icon library
-- **Web Vitals**: Performance monitoring
 
 ## Development
 
