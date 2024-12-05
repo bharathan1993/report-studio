@@ -148,6 +148,7 @@ const QueryGenerator = ({ onCopyToDQ }) => {
   const [generatedQuery, setGeneratedQuery] = useState('');
   const [groupByFields, setGroupByFields] = useState([]);
   const [orderByFields, setOrderByFields] = useState([]);
+  const [orderByDirections, setOrderByDirections] = useState({});
   const [showLoadingPopup, setShowLoadingPopup] = useState(false);
   const [loadingMessageType, setLoadingMessageType] = useState('generating');
   const [queryResults, setQueryResults] = useState(null);
@@ -643,13 +644,21 @@ const QueryGenerator = ({ onCopyToDQ }) => {
       console.log('Group By:', groupByFields);
       console.log('Order By:', orderByFields);
       
-      // If moving to step 3, log the generated query
+      // If moving to step 3, show loading popup and generate query
       if (currentStep === 2) {
-        const query = generateQuery();
-        console.log('Generated Query JSON:', query);
+        setLoadingMessageType('generating');
+        setShowLoadingPopup(true);
+        
+        // Simulate query generation delay
+        setTimeout(() => {
+          const query = generateQuery();
+          console.log('Generated Query JSON:', query);
+          setShowLoadingPopup(false);
+          setCurrentStep(currentStep + 1);
+        }, 3000); // Changed from 1000 to 3000 milliseconds
+      } else {
+        setCurrentStep(currentStep + 1);
       }
-      
-      setCurrentStep(currentStep + 1);
     }
   };
 
@@ -694,7 +703,8 @@ const QueryGenerator = ({ onCopyToDQ }) => {
       const [table, fieldName] = field.split('.');
       return {
         table,
-        field: fieldName
+        field: fieldName,
+        direction: orderByDirections[field] || 'ASC' // Default to ASC if not specified
       };
     });
 
@@ -754,7 +764,7 @@ const QueryGenerator = ({ onCopyToDQ }) => {
     // Add ORDER BY clause
     if (queryJson.query.orderBy.length > 0) {
       const orderByFields = queryJson.query.orderBy.map(field => 
-        `${field.table}.${field.field}`
+        `${field.table}.${field.field} ${field.direction}`
       );
       query += '\nORDER BY ' + orderByFields.join(', ');
     }
@@ -772,12 +782,16 @@ const QueryGenerator = ({ onCopyToDQ }) => {
     setOrderByFields(selectedOptions);
   };
 
+  const handleOrderByDirectionChange = (field, direction) => {
+    setOrderByDirections((prevDirections) => ({ ...prevDirections, [field]: direction }));
+  };
+
   useEffect(() => {
     if (currentStep === 3) {
       const query = generateQuery();
       setGeneratedQuery(query.sql);
     }
-  }, [currentStep, selectedFields, fieldFunctions, filters, groupByFields, orderByFields]);
+  }, [currentStep, selectedFields, fieldFunctions, filters, groupByFields, orderByFields, orderByDirections]);
 
   const handlePreviousStep = () => {
     if (currentStep > 1) {
@@ -1028,6 +1042,17 @@ const QueryGenerator = ({ onCopyToDQ }) => {
                   ))
                 )}
               </select>
+              <div className="flex items-center gap-2 mt-2">
+                <label className="text-sm text-gray-600">Direction:</label>
+                <select
+                  value={orderByDirections[orderByFields[0]] || 'ASC'}
+                  onChange={(e) => handleOrderByDirectionChange(orderByFields[0], e.target.value)}
+                  className="text-sm border rounded p-1 min-w-[80px]"
+                >
+                  <option value="ASC">ASC</option>
+                  <option value="DESC">DESC</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1224,9 +1249,9 @@ const QueryGenerator = ({ onCopyToDQ }) => {
       {/* Loading Popup */}
       {showLoadingPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 flex flex-col items-center space-y-4 transform transition-all duration-300 ease-in-out animate-fadeIn">
-            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-lg font-semibold text-gray-700">
+          <div className="bg-white p-6 rounded-lg shadow-lg flex flex-col items-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-lg font-semibold">
               {loadingMessageType === 'generating' ? 'Generating Query...' : 'Executing Query...'}
             </p>
           </div>
